@@ -3675,9 +3675,18 @@
         },
         {
           "flags": [
+            "--browser"
+          ],
+          "help": "also open the web app in the browser",
+          "name": "browser",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "flags": [
             "--no-browser"
           ],
-          "help": "don't open the browser",
+          "help": "don't open the browser (the default now)",
           "name": "no_browser",
           "required": false,
           "type": "boolean"
@@ -3721,9 +3730,18 @@
         },
         {
           "flags": [
+            "--browser"
+          ],
+          "help": "also open the web app in the browser",
+          "name": "browser",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "flags": [
             "--no-browser"
           ],
-          "help": "don't open the browser",
+          "help": "don't open the browser (the default now)",
           "name": "no_browser",
           "required": false,
           "type": "boolean"
@@ -3742,7 +3760,7 @@
       "data": {
         "description": "interactive; no JSON output"
       },
-      "help": "set up anything missing, then open the app (start here)",
+      "help": "set up anything missing, then run Jotted in this window (start here)",
       "operations": []
     },
     {

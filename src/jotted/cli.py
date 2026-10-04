@@ -519,7 +519,7 @@ def cmd_serve(cfg: Config, args: argparse.Namespace) -> int:
         errors.print(f"[yellow]Warning[/yellow]: listening on {host}; the app has no login, so anyone who can "
                      "reach this address can read and change your tasks.")
     return _serve(cfg, host, port, background=not args.no_background, dev=args.dev,
-                  open_path=None if args.no_browser else "/")
+                  open_path="/" if args.browser and not args.no_browser else None)
 
 
 def _running_here(url: str) -> bool:
@@ -533,10 +533,34 @@ def _running_here(url: str) -> bool:
         return False
 
 
+def _show_running(jotted, url: str) -> None:
+    """What a person at the terminal sees once Jotted runs: that it started, and what it does."""
+    try:
+        status, settings = jotted.status(), jotted.settings()
+    except Exception as e:  # noqa: BLE001 - a summary that fails mustn't stop Jotted
+        log.debug("no summary: %s", e)
+        console.print(f"[green]✓ Jotted is running[/green]  [dim]{url}[/dim]")
+        return
+    src, items, todo = status["source"], status["items"], status["todo"]
+    every = settings["poll_interval_s"]
+    lines = [
+        ("Source", f"{src['label']} ({src['detail']})" if src.get("detail") else src["label"]),
+        ("Watching", f"{', '.join(status['watch'])}  [dim](checks every {every} s)[/dim]" if status["watch"] else
+         "[yellow]nothing yet[/yellow]: choose notebooks in the Jotted app, or `jotted watch add PATH`"),
+        ("To-do", f"{items['open']} open" + (f" · {items['proposed']} proposed" if items.get("proposed") else "")
+         + (f" · on the tablet as “{todo['name']}”" if todo["enabled"] else " · not on the tablet")),
+        ("Web app", f"{url}  [dim](optional; `--browser` opens it)[/dim]"),
+    ]
+    console.print("[green]✓ Jotted is running[/green]")
+    for label, text in lines:
+        console.print(f"  {label:<9} {text}", highlight=False)
+
+
 def _serve(cfg: Config, host: str, port: int, *, background: bool = True, dev: bool = False,
            open_path: str | None = None) -> int:
-    """Serve the web app; with `open_path`, open the browser there once it is listening.
-    Port 0 picks a free one. While it runs, serve.json lets CLI commands hand it their work."""
+    """Serve the web app, background checks and the CLI's fast path, and say so; with
+    `open_path`, also open the browser there. Port 0 picks a free one. While it runs,
+    serve.json lets CLI commands hand it their work."""
     import socket
     import webbrowser
 
@@ -570,11 +594,12 @@ def _serve(cfg: Config, host: str, port: int, *, background: bool = True, dev: b
     server = create_server(app, host=host, port=port, threads=8, ident="jotted")
     port = int(server.effective_port)
     url = f"http://{host}:{port}"
-    console.print(f"Jotted at [bold]{url}[/bold]  (store: {cfg.server.db})")
+    log.debug("serving at %s (store: %s)", url, cfg.server.db)
     fastpath.write(cfg, host, port, app.config["token"])
     import signal
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # how an app stops it: still clean up serve.json
+    _show_running(app.config["jotted"], url)
     if open_path is not None:
         webbrowser.open(url + open_path)
     console.print("[dim]Leave this window open while you use Jotted. Press Ctrl+C to stop.[/dim]")
@@ -610,7 +635,8 @@ def _rerun() -> None:
 
 
 def cmd_start(cfg: Config | None, args: argparse.Namespace) -> int:
-    """Update from GitHub, set up whatever is missing, then run the web app and open it in the browser."""
+    """Update from GitHub, set up whatever is missing, then run Jotted in this window and say so.
+    The browser opens only with --browser: the Jotted app is the way in now."""
     from . import selfupdate
 
     if not can_prompt(args):
@@ -622,12 +648,14 @@ def cmd_start(cfg: Config | None, args: argparse.Namespace) -> int:
     if cfg is None:
         return 1
     _setup_logging(cfg.logging.level)
-    from .adapters.sqlite_repo import SqliteRepository
+    open_path = None
+    if args.browser and not args.no_browser:
+        from .adapters.sqlite_repo import SqliteRepository
 
-    first_time = not SqliteRepository(cfg.server.db).settings().watch  # nothing watched yet: start in Settings
+        first_time = not SqliteRepository(cfg.server.db).settings().watch  # nothing watched yet: start in Settings
+        open_path = "/#settings" if first_time else "/"
     console.print()
-    return _serve(cfg, cfg.server.host, cfg.server.port if args.port is None else args.port,
-                  open_path=None if args.no_browser else ("/#settings" if first_time else "/"))
+    return _serve(cfg, cfg.server.host, cfg.server.port if args.port is None else args.port, open_path=open_path)
 
 
 def cmd_update(cfg: Config | None, args: argparse.Namespace) -> Done:
@@ -821,12 +849,15 @@ def build_parser() -> argparse.ArgumentParser:
     sv = command("serve", cmd_serve, "run the web app, background checking and the CLI's fast path")
     sv.add_argument("--host", help="default: server.host")
     sv.add_argument("--port", type=int, help="default: server.port; 0 picks a free one")
-    sv.add_argument("--no-browser", action="store_true", help="don't open the browser")
+    sv.add_argument("--browser", action="store_true", help="also open the web app in the browser")
+    sv.add_argument("--no-browser", action="store_true", help="don't open the browser (the default now)")
     sv.add_argument("--dev", action="store_true", help="use Flask's development server")
     sv.add_argument("--no-background", action="store_true", help="don't check or write to the device in the background")
-    sa = command("start", cmd_start, "set up anything missing, then open the app (start here)", no_config=True)
+    sa = command("start", cmd_start, "set up anything missing, then run Jotted in this window (start here)",
+                 no_config=True)
     sa.add_argument("--port", type=int, help="default: server.port")
-    sa.add_argument("--no-browser", action="store_true", help="don't open the browser")
+    sa.add_argument("--browser", action="store_true", help="also open the web app in the browser")
+    sa.add_argument("--no-browser", action="store_true", help="don't open the browser (the default now)")
     sa.add_argument("--no-update", action="store_true", help="don't check GitHub for a newer version")
     command("update", cmd_update, "update Jotted to the latest version on GitHub", no_config=True)
     command("version", cmd_version, "release and contract versions", no_config=True)

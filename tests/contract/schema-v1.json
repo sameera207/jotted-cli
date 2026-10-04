@@ -2826,6 +2826,7 @@
   },
   "serve": {
    "arguments": [
+    "browser",
     "dev",
     "host",
     "no_background",
@@ -3079,6 +3080,7 @@
   },
   "start": {
    "arguments": [
+    "browser",
     "no_browser",
     "no_update",
     "port"

@@ -13,15 +13,15 @@ uv tool install git+https://github.com/sameera207/jotted-cli
 jotted start
 ```
 
-`jotted start` walks you through the rest, then opens the app in your browser:
+`jotted start` walks you through the rest, then runs Jotted in that window and says so:
 
 1. It creates a folder for settings, data and keys (`~/Library/Application Support/jotted` on a Mac, `~/.local/share/jotted` on Linux).
 2. It downloads [rmapi](https://github.com/ddvk/rmapi), which talks to reMarkable Cloud, and checks the download against its published checksum.
 3. It connects your reMarkable with a one-time code from my.remarkable.com.
 4. It asks for your API keys and checks them. They're saved in that folder, readable by your user only. Keys exported in your shell take precedence.
-5. It opens the app at Settings: tick the folders whose notes should feed your list.
+5. It starts Jotted and prints what it is doing. Choose the folders whose notes should feed your list in the Jotted app (or `jotted watch add PATH`; `jotted start --browser` opens the web app).
 
-Run `jotted start` again whenever you want the app; finished steps are skipped. `jotted setup` goes through the steps again, to reconnect the tablet or change a key. Leave the terminal window open while you use the app.
+Run `jotted start` again whenever you want Jotted running; finished steps are skipped. `jotted setup` goes through the steps again, to reconnect the tablet or change a key. Leave the terminal window open while Jotted runs.
 
 ### Updates
 
@@ -143,7 +143,7 @@ The CLI is the product's one public interface: everything the web app does is a 
 | `jotted status` | What is read, judged and published, and when |
 | `jotted image page DOC PAGE` / `image line DOC ANCHOR` | Where an item came from, as SVG |
 | `jotted events [--since CURSOR] [--follow]` | What changed; `--follow` prints changes as they happen |
-| `jotted serve [--no-browser] [--port 0]` | The web app, background checking and the CLI's fast path |
+| `jotted serve [--browser] [--port 0]` | The web app, background checking and the CLI's fast path |
 | `jotted version` / `jotted schema` | Release and contract versions; every command and the shape of its data |
 | `jotted mcp` | Jotted's operations as MCP tools, for agents |
 | `jotted claude connect` | Add Jotted to Claude Desktop (`claude status`, `claude disconnect`) |

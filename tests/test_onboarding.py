@@ -229,7 +229,7 @@ def test_a_failed_reconnect_keeps_the_old_connection(world, home):
 # ---------------------------------------------------------------- start
 
 
-def test_start_opens_settings_first_and_reuses_a_running_app(world, home, monkeypatch):
+def test_start_runs_without_the_browser_unless_asked_and_reuses_a_running_app(world, home, monkeypatch):
     opened, served, real_serve = [], [], cli._serve
     monkeypatch.setattr(cli, "can_prompt", lambda args: True)  # a person at a terminal
     monkeypatch.setattr("builtins.input", lambda prompt="": {"y": "y"}.get("y"))  # rmapi: yes
@@ -238,7 +238,9 @@ def test_start_opens_settings_first_and_reuses_a_running_app(world, home, monkey
     monkeypatch.setattr(onboarding.ConsoleUI, "secret", lambda self, p: next(keys_iter))
     monkeypatch.setattr(cli, "_serve", lambda cfg, host, port, **kw: served.append((port, kw["open_path"])) or 0)
     assert cli.main(["start"]) == 0
-    assert served == [(8765, "/#settings")]
+    assert served == [(8765, None)]  # the Jotted app is the way in: no browser
+    assert cli.main(["start", "--browser"]) == 0
+    assert served[-1] == (8765, "/#settings")  # nothing watched yet: Settings first
 
     import webbrowser
     monkeypatch.setattr(webbrowser, "open", opened.append)

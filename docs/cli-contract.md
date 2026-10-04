@@ -299,8 +299,8 @@ Generated from `jotted schema` (release 0.1.0, contract 1, accepts 1+). Exact ar
 | `jotted image page DOC_ID PAGE [--highlight ANCHOR] [--width WIDTH] [--out OUT]` | A page, with a line highlighted. |
 | `jotted image line DOC_ID ANCHOR [--out OUT]` | One handwritten line. |
 | `jotted events [--since SINCE] [--follow]` | Changes since a cursor; --follow keeps printing them. |
-| `jotted serve [--host HOST] [--port PORT] [--no-browser] [--dev] [--no-background]` | Run the web app, background checking and the CLI's fast path. |
-| `jotted start [--port PORT] [--no-browser] [--no-update]` | Set up anything missing, then open the app (start here). |
+| `jotted serve [--host HOST] [--port PORT] [--browser] [--no-browser] [--dev] [--no-background]` | Run the web app, background checking and the CLI's fast path. |
+| `jotted start [--port PORT] [--browser] [--no-browser] [--no-update]` | Set up anything missing, then run Jotted in this window (start here). |
 | `jotted update` | Update Jotted to the latest version on GitHub. |
 | `jotted version` | Release and contract versions. |
 | `jotted schema` | Every command: its arguments, options and the shape of its data. |
@@ -750,14 +750,15 @@ jotted events [--since SINCE] [--follow]
 Run the web app, background checking and the CLI's fast path.
 
 ```text
-jotted serve [--host HOST] [--port PORT] [--no-browser] [--dev] [--no-background]
+jotted serve [--host HOST] [--port PORT] [--browser] [--no-browser] [--dev] [--no-background]
 ```
 
 | Argument | Type | Notes |
 | --- | --- | --- |
 | `--host` | `string` | default: server.host |
 | `--port` | `integer` | default: server.port; 0 picks a free one |
-| `--no-browser` | `boolean` | don't open the browser |
+| `--browser` | `boolean` | also open the web app in the browser |
+| `--no-browser` | `boolean` | don't open the browser (the default now) |
 | `--dev` | `boolean` | use Flask's development server |
 | `--no-background` | `boolean` | don't check or write to the device in the background |
 
@@ -765,16 +766,17 @@ jotted serve [--host HOST] [--port PORT] [--no-browser] [--dev] [--no-background
 
 ### `jotted start`
 
-Set up anything missing, then open the app (start here).
+Set up anything missing, then run Jotted in this window (start here).
 
 ```text
-jotted start [--port PORT] [--no-browser] [--no-update]
+jotted start [--port PORT] [--browser] [--no-browser] [--no-update]
 ```
 
 | Argument | Type | Notes |
 | --- | --- | --- |
 | `--port` | `integer` | default: server.port |
-| `--no-browser` | `boolean` | don't open the browser |
+| `--browser` | `boolean` | also open the web app in the browser |
+| `--no-browser` | `boolean` | don't open the browser (the default now) |
 | `--no-update` | `boolean` | don't check GitHub for a newer version |
 
 `data`: interactive; no JSON output.
