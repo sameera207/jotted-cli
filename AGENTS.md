@@ -9,8 +9,29 @@ uv run python scripts/contract_docs.py         # regenerate the contract documen
 uv run --with pyinstaller python scripts/build_standalone.py   # the standalone build apps bundle (build/release/)
 ```
 
-A release is a `vX.Y.Z` tag matching `version` in `pyproject.toml`. CI then attaches the contract documents
-(`contract.yml`) and a standalone build per macOS architecture with its checksum (`standalone.yml`).
+Pushing to `main` releases nothing: installs and the Jotted app update only to published releases.
+
+### Releases
+
+Ask Claude Code to `/release` (`.claude/commands/release.md`). It runs `scripts/release.py plan`
+(checks main is clean, pushed and green; suggests the version from what changed in the contract
+since the last tag), agrees the version with you, runs `release.py prepare X.Y.Z`, then commits
+"Release vX.Y.Z", tags it with the notes as the tag's message and pushes. `release.yml` does the rest:
+tests, a standalone build per macOS architecture, the signed manifest, and a release published only
+once all eight files are on it.
+
+The manifest (`release.json`, from `scripts/release_manifest.py`) is signed with minisign. Apps
+check it with `docs/release-key.pub` before they download anything. Setting the key up, once:
+
+```bash
+brew install minisign
+minisign -G -W -p docs/release-key.pub -s ~/.minisign/jotted-release.key   # -W: no password; GitHub holds it
+gh secret set MINISIGN_SECRET_KEY < ~/.minisign/jotted-release.key
+git add docs/release-key.pub && git commit -m "The release signing key" && git push
+```
+
+Keep the secret key out of the repo, and somewhere safe: an app trusts only releases it signed, so
+losing it means shipping a new app with a new public key.
 
 ## Building something on Jotted (an app, an MCP connector, a script)?
 

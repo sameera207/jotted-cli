@@ -1,15 +1,14 @@
-# Tests (including: the contract documents match the CLI), and on a release tag, the contract
-# documents attached to the GitHub release, so apps and agents in other repos can pin them.
+# Tests, including that the contract documents match the CLI, on every push to main and every
+# pull request. Releases are release.yml.
 name: contract
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
 
 permissions:
-  contents: write  # attaching files to a release
+  contents: read
 
 jobs:
   test:
@@ -21,16 +20,3 @@ jobs:
       - name: Contract documents are up to date
         run: uv run python scripts/contract_docs.py --check
       - run: uv run pytest -q
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Attach the contract to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
-          gh release upload "$GITHUB_REF_NAME" docs/schema.json docs/cli-contract.md --clobber

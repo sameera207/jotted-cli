@@ -205,6 +205,24 @@ def removed(old: dict, new: dict) -> list[str]:
     return gone
 
 
+def added(old: dict, new: dict) -> list[str]:
+    """What `new` promises that `old` didn't (both from `baseline`): for release notes."""
+    found = [f"error code `{code}`" for code in new["errors"] if code not in old["errors"]]
+    for name, c in new["commands"].items():
+        if name not in old["commands"]:
+            found.append(f"command `jotted {name}`")
+            continue
+        was = old["commands"][name]
+        found += [f"`jotted {name}` option or argument `{a}`" for a in c["arguments"] if a not in was["arguments"]]
+        found += [f"`jotted {name}` data field `{p.lstrip('.')}`" for p in _gone_fields(c["data"], was["data"], "")]
+    for op, params in new["operations"].items():
+        if op not in old["operations"]:
+            found.append(f"operation `{op}`")
+        else:
+            found += [f"operation `{op}` parameter `{p}`" for p in params if p not in old["operations"][op]]
+    return found
+
+
 def breaking() -> list[str]:
     """Removals since the recorded promise for this contract version."""
     if not BASELINE.is_file():

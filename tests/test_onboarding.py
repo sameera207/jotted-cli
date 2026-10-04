@@ -265,62 +265,74 @@ GIT_INSTALL = json.dumps({"url": "https://github.com/someone/jotted",
                           "vcs_info": {"vcs": "git", "commit_id": "a" * 40}})
 
 
-def test_only_an_unpinned_github_install_updates_itself():
-    assert selfupdate.installed(GIT_INSTALL) == selfupdate.Install(repo="someone/jotted", commit="a" * 40)
-    pinned = json.dumps({"url": "https://github.com/someone/jotted",
-                         "vcs_info": {"vcs": "git", "commit_id": "a" * 40, "requested_revision": "v1"}})
+def test_github_installs_follow_releases_and_hand_pinned_ones_are_left_alone():
+    assert selfupdate.installed(GIT_INSTALL, "0.1.0") == selfupdate.Install(repo="someone/jotted", version="0.1.0")
+    at_release = json.dumps({"url": "https://github.com/someone/jotted",
+                             "vcs_info": {"vcs": "git", "commit_id": "a" * 40, "requested_revision": "v0.2.0"}})
+    assert selfupdate.installed(at_release, "0.2.0") == selfupdate.Install(repo="someone/jotted", version="0.2.0")
+    for revision in ("main", "a" * 40, "my-branch", "v1"):
+        pinned = json.dumps({"url": "https://github.com/someone/jotted",
+                             "vcs_info": {"vcs": "git", "commit_id": "a" * 40, "requested_revision": revision}})
+        assert selfupdate.installed(pinned, "0.1.0") is None, revision
     checkout = json.dumps({"url": "file:///src/jotted", "dir_info": {"editable": True}})
-    assert selfupdate.installed(pinned) is None
-    assert selfupdate.installed(checkout) is None
+    assert selfupdate.installed(checkout, "0.1.0") is None
+
+
+def test_release_versions_compare_as_numbers():
+    assert selfupdate.release("v0.10.0") > selfupdate.release("0.9.3")
+    assert selfupdate.release("v1.2.3-rc1") is None and selfupdate.release("nightly") is None
 
 
 @pytest.fixture
 def update_world(monkeypatch):
-    """An install at commit aaa…; GitHub's head and the upgrade are scripted."""
-    state = {"commit": "a" * 40, "head": "a" * 40, "upgrades": 0}
+    """An install at 0.1.0; GitHub's latest release and the reinstall are scripted."""
+    state = {"version": "0.1.0", "latest": "v0.1.0", "upgrades": []}
     monkeypatch.delenv(selfupdate.SKIP_VAR, raising=False)
     monkeypatch.delenv(selfupdate.DONE_VAR, raising=False)
-    monkeypatch.setattr(selfupdate, "installed", lambda: selfupdate.Install("someone/jotted", state["commit"]))
-    monkeypatch.setattr(selfupdate, "latest", lambda repo: state["head"])
+    monkeypatch.setattr(selfupdate, "installed", lambda: selfupdate.Install("someone/jotted", state["version"]))
+    monkeypatch.setattr(selfupdate, "latest", lambda repo: state["latest"])
 
-    def upgrade():
-        state["upgrades"] += 1
-        state["commit"] = state["head"]
+    def upgrade(repo, tag):
+        state["upgrades"].append(tag)
+        state["version"] = tag.removeprefix("v")
 
     monkeypatch.setattr(selfupdate, "upgrade", upgrade)
     return state
 
 
-def test_start_updates_and_reruns_when_github_is_ahead(update_world, monkeypatch):
-    update_world["head"] = "b" * 40
+def test_start_updates_to_a_newer_release_and_reruns(update_world, monkeypatch):
+    update_world["latest"] = "v0.2.0"
     monkeypatch.setattr(cli, "can_prompt", lambda args: True)
     reran = []
     monkeypatch.setattr(cli, "_rerun", lambda: reran.append(True) or (_ for _ in ()).throw(SystemExit(0)))
     with pytest.raises(SystemExit):
         cli.main(["start"])
-    assert update_world["upgrades"] == 1 and reran == [True]
+    assert update_world["upgrades"] == ["v0.2.0"] and reran == [True]
 
 
-def test_no_update_when_current_offline_skipped_or_already_rerun(update_world, monkeypatch):
+def test_no_update_when_current_ahead_offline_unreleased_skipped_or_already_rerun(update_world, monkeypatch):
     console = cli.console
     assert selfupdate.check(console) is False  # up to date
-    update_world["head"] = None  # offline
+    update_world["version"] = "0.3.0"  # main, ahead of the latest release
     assert selfupdate.check(console) is False
-    update_world["head"] = "b" * 40
+    update_world["version"] = "0.1.0"
+    update_world["latest"] = None  # offline, or nothing released yet
+    assert selfupdate.check(console) is False
+    update_world["latest"] = "v0.2.0"
     monkeypatch.setenv(selfupdate.DONE_VAR, "1")  # the re-run after an update
     assert selfupdate.check(console) is False
     monkeypatch.delenv(selfupdate.DONE_VAR)
     monkeypatch.setenv(selfupdate.SKIP_VAR, "1")
     assert selfupdate.check(console) is False
-    assert update_world["upgrades"] == 0
+    assert update_world["upgrades"] == []
     assert selfupdate.check(console, force=True) is True  # `jotted update` ignores both
-    assert update_world["upgrades"] == 1
+    assert update_world["upgrades"] == ["v0.2.0"]
 
 
 def test_a_failed_upgrade_carries_on(update_world, monkeypatch):
-    update_world["head"] = "b" * 40
+    update_world["latest"] = "v0.2.0"
 
-    def fail():
+    def fail(repo, tag):
         raise selfupdate.UpdateError("no network")
 
     monkeypatch.setattr(selfupdate, "upgrade", fail)

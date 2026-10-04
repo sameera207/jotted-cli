@@ -1,0 +1,102 @@
+# A release: a vX.Y.Z tag (pushed by the /release command, .claude/commands/release.md) becomes a
+# published GitHub release holding everything apps pin or update to:
+#
+#   jotted-X.Y.Z-macos-arm64.tar.gz (+ .sha256)   standalone builds, Python inside
+#   jotted-X.Y.Z-macos-x64.tar.gz   (+ .sha256)   (scripts/build_standalone.py)
+#   schema.json, cli-contract.md                   the contract
+#   release.json (+ .minisig)                      what's in it, signed (scripts/release_manifest.py)
+#
+# Nothing is public until all of it is there: the builds are kept as artifacts, then one job
+# creates the release as a draft with every file, checks them, and only then publishes it. The
+# tag's message is the release notes. Run by hand (workflow_dispatch), it only builds.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # creating the release
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: The tag is the version in pyproject.toml
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(uv run --no-project python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME but pyproject.toml says $version"; exit 1; }
+      - run: uv sync
+      - run: uv run python scripts/contract_docs.py --check
+      - run: uv run pytest -q
+
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]  # Apple silicon → macos-arm64; Intel → macos-x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build and smoke-test
+        run: uv run --python 3.11 --with pyinstaller python scripts/build_standalone.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jotted-${{ matrix.runner }}
+          path: build/release/
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: jotted-*
+          merge-multiple: true
+          path: dist
+      - name: Release notes, from the tag's message
+        run: |
+          git fetch --force origin "+refs/tags/$TAG:refs/tags/$TAG"
+          git for-each-ref "refs/tags/$TAG" --format='%(contents)' > notes.md
+          test -s notes.md || echo "Jotted $TAG" > notes.md
+      - name: The manifest
+        run: |
+          cp docs/schema.json docs/cli-contract.md dist/
+          uv run --no-project python scripts/release_manifest.py dist --tag "$TAG"
+      - name: Sign the manifest
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          test -n "$MINISIGN_SECRET_KEY" || { echo "::error::The MINISIGN_SECRET_KEY secret isn't set: see AGENTS.md, Releases"; exit 1; }
+          test -f docs/release-key.pub || { echo "::error::docs/release-key.pub is missing: see AGENTS.md, Releases"; exit 1; }
+          sudo apt-get install -y -qq minisign
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/release.key"
+          minisign -S -s "$RUNNER_TEMP/release.key" -m dist/release.json -t "jotted $TAG"
+          rm -f "$RUNNER_TEMP/release.key"
+          minisign -V -p docs/release-key.pub -m dist/release.json  # the key apps trust signed it
+      - name: Draft with every file, check, then publish
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --draft --verify-tag --title "Jotted $TAG" --notes-file notes.md
+          fi
+          expected=$(ls dist | sort)
+          attached=$(gh release view "$TAG" --json assets --jq '.assets[].name' | sort)
+          test "$expected" = "$attached" || { echo "::error::the release holds $attached, expected $expected"; exit 1; }
+          gh release edit "$TAG" --draft=false --latest
+          gh release view "$TAG" --json url --jq .url

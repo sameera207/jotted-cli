@@ -25,15 +25,15 @@ Run `jotted start` again whenever you want Jotted running; finished steps are sk
 
 ### Updates
 
-`jotted start` checks GitHub first. When `main` has moved on since you installed, it runs `uv tool upgrade jotted` and starts again in the new version. If GitHub can't be reached, or the upgrade fails, it carries on with the version you have.
+`jotted start` checks GitHub first. When there is a newer release than the version you have, it reinstalls at that release (`uv tool install --force git+…@vX.Y.Z`) and starts again in it. If GitHub can't be reached, or the upgrade fails, it carries on with the version you have.
 
 - An app that is already running keeps its old code: stop it with Ctrl+C, then `jotted start` again.
 - `jotted update` updates without starting the app.
 - `jotted start --no-update`, or `JOTTED_NO_UPDATE=1`, skips the check.
 
-Only an install from GitHub updates itself. A checkout run with `uv run`, or an install pinned to a tag or commit (`git+…@v1`), never does.
+Only an install from GitHub updates itself, and only to releases. A checkout run with `uv run`, or an install pinned by hand to a commit or branch, never does.
 
-So shipping a fix is: commit it to `main` and push. Each install picks it up the next time it starts.
+So shipping a fix is: commit it to `main`, push, then cut a release (`/release` in Claude Code; see `AGENTS.md`). Each install picks it up the next time it starts, and the Jotted app downloads it.
 
 ## Development setup
 
