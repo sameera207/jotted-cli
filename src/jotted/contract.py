@@ -16,6 +16,8 @@ work in this process or hand it to a running `jotted serve`.
 
 from __future__ import annotations
 
+import os
+import sys
 from typing import Any
 
 CONTRACT = 1  # the "v" in every output
@@ -68,6 +70,15 @@ def release() -> str:
         return metadata.version("jotted")
     except metadata.PackageNotFoundError:
         return "0+unknown"
+
+
+BUNDLED_VAR = "JOTTED_BUNDLED"  # set by an app that ships its own copy of jotted
+
+
+def bundled() -> bool:
+    """Whether this copy belongs to an app, which updates it: the app says so, or this is a
+    standalone build (frozen Python), which `uv` can't upgrade."""
+    return bool(os.environ.get(BUNDLED_VAR)) or bool(getattr(sys, "frozen", False))
 
 
 def ok(data: Any) -> dict:

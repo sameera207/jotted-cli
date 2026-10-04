@@ -6,7 +6,11 @@ Jotted turns handwritten notes (reMarkable today) into one to-do list. Python 3.
 uv run pytest -q                               # all tests (synthetic pages, a fake rmapi; no tablet or key needed)
 uv run jotted --json <command>                 # the CLI
 uv run python scripts/contract_docs.py         # regenerate the contract documents (see below)
+uv run --with pyinstaller python scripts/build_standalone.py   # the standalone build apps bundle (build/release/)
 ```
+
+A release is a `vX.Y.Z` tag matching `version` in `pyproject.toml`. CI then attaches the contract documents
+(`contract.yml`) and a standalone build per macOS architecture with its checksum (`standalone.yml`).
 
 ## Building something on Jotted (an app, an MCP connector, a script)?
 

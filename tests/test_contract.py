@@ -359,6 +359,19 @@ def test_a_bundled_copy_never_updates_itself(cfg, capsys, monkeypatch):
     assert data(capsys, "version")["bundled"]
 
 
+def test_a_standalone_build_counts_as_bundled(cfg, capsys, monkeypatch, tmp_path):
+    """A frozen build (scripts/build_standalone.py) can't be upgraded by uv: it never tries, and
+    Claude Desktop runs it as the app's copy."""
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    code, err = error(capsys, "update")
+    assert err["code"] == "conflict"
+    assert data(capsys, "version")["bundled"]
+    (tmp_path / "Claude").mkdir()
+    monkeypatch.setenv("JOTTED_CLAUDE_CONFIG", str(tmp_path / "Claude" / "claude_desktop_config.json"))
+    entry = data(capsys, "claude", "connect", "--command", sys.executable, "--dry-run")["entry"]
+    assert entry["env"]["JOTTED_BUNDLED"] == "1"
+
+
 # ---------------------------------------------------------------- schema
 
 

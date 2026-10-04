@@ -16,10 +16,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .. import config
-from ..contract import Error
+from ..contract import BUNDLED_VAR, Error, bundled
 
 NAME = "jotted"  # the key under mcpServers
-BUNDLED_VAR = "JOTTED_BUNDLED"  # set by an app that ships its own jotted (the Jotted app)
 PATH_VAR = "JOTTED_CLAUDE_CONFIG"  # use another config file (tests, a second profile)
 
 
@@ -95,8 +94,8 @@ def entry(command: str, admin: bool = False) -> dict:
     out: dict = {"command": command, "args": ["mcp", "--admin"] if admin else ["mcp"]}
     env = {name: str(Path(os.environ[name]).expanduser().absolute())
            for name in (config.ENV_VAR, config.HOME_VAR) if os.environ.get(name)}
-    if os.environ.get(BUNDLED_VAR):
-        env[BUNDLED_VAR] = os.environ[BUNDLED_VAR]
+    if bundled():
+        env[BUNDLED_VAR] = os.environ.get(BUNDLED_VAR) or "1"
     if env:
         out["env"] = env
     return out

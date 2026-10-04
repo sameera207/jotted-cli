@@ -37,7 +37,7 @@ log = logging.getLogger("jotted")
 console = Console()
 errors = Console(stderr=True)
 
-BUNDLED_VAR = "JOTTED_BUNDLED"  # set by the desktop app: it updates its own copy
+BUNDLED_VAR = contract.BUNDLED_VAR  # set by the desktop app: it updates its own copy
 
 
 def _setup_logging(level: str) -> None:
@@ -616,7 +616,7 @@ def cmd_start(cfg: Config | None, args: argparse.Namespace) -> int:
     if not can_prompt(args):
         raise UsageError("`jotted start` is for people at a terminal; a wrapper runs `jotted setup status`, "
                          "then `jotted serve --no-browser`")
-    if not args.no_update and not os.environ.get(BUNDLED_VAR) and selfupdate.check(console):
+    if not args.no_update and not contract.bundled() and selfupdate.check(console):
         _rerun()
     cfg = _onboard(redo=False)
     if cfg is None:
@@ -634,7 +634,7 @@ def cmd_update(cfg: Config | None, args: argparse.Namespace) -> Done:
     """Update to the latest version on GitHub now."""
     from . import selfupdate
 
-    if os.environ.get(BUNDLED_VAR):
+    if contract.bundled():
         raise contract.Error("conflict", "This copy of Jotted comes with the Jotted app, which updates it")
     updated = selfupdate.check(errors if args.json else console, force=True)  # says what it did
     return Done({"updated": updated}, lambda d: console.print(
@@ -649,7 +649,7 @@ def cmd_version(cfg: Config | None, args: argparse.Namespace) -> Done:
     cfg = steps.load_config()
     data = {"version": contract.release(), "contract": contract.CONTRACT, "contract_min": contract.CONTRACT_MIN,
             "source_plugin": cfg.plugins.source if cfg else None, "python": platform.python_version(),
-            "bundled": bool(os.environ.get(BUNDLED_VAR))}
+            "bundled": contract.bundled()}
     return Done(data, lambda d: console.print(
         f"jotted {d['version']} (contract {d['contract']}, accepts {d['contract_min']}+; "
         f"source {d['source_plugin'] or 'not set up'}; Python {d['python']})", highlight=False))

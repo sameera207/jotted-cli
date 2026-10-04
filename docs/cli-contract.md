@@ -166,7 +166,8 @@ jotted --json version
 - `contract_min` is the oldest contract this build still accepts.
 - At start-up, if `contract` isn't one you were built for, stop and say this version of Jotted needs updating, instead of half-working.
 - Pin a release. Its `schema.json` is attached to the GitHub release and kept in `docs/schema.json` at that tag.
-- A copy bundled inside an app should run with `JOTTED_BUNDLED=1`: then it never updates itself (`update` fails with `conflict`), and the app updates it by shipping a new pin.
+- To bundle Jotted in an app, use the release's standalone build: `jotted-X.Y.Z-macos-arm64.tar.gz` and `-macos-x64.tar.gz`, each with a `.sha256` beside it. Each unpacks to a `jotted/` folder holding the `jotted` executable and `_internal/` (Python and every library inside; nothing to install). Run `jotted/jotted` from where it is unpacked: it needs its `_internal/` folder beside it. Sign every file in the folder with your app.
+- A copy bundled inside an app should run with `JOTTED_BUNDLED=1`: then it never updates itself (`update` fails with `conflict`), and the app updates it by shipping a new pin. A standalone build counts as bundled even without it.
 
 Other environment variables: `JOTTED_CONFIG` (another `config.toml`), `JOTTED_HOME` (another app folder; handy for tests), `JOTTED_NO_UPDATE=1`, `JOTTED_CLAUDE_CONFIG` (the Claude Desktop settings file `claude connect` edits; for tests).
 
