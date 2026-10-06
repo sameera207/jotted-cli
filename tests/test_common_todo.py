@@ -432,6 +432,50 @@ def test_items_added_on_the_web_are_printed_and_ticked_like_any_other(repo):
         repo.add_item("  - ")
 
 
+def dismissed_on_the_document(repo):
+    """Two collected items in slots 0 and 1, the document read once, then the one in slot 0 dismissed."""
+    source, judge, pub = FakeSource(), FakeJudge(), FakePublisher()
+    notes(source)
+    service.collect(source, judge, repo)
+    service.sync_todo(repo, pub)
+    pub.ticks = (set(), "m1")
+    first = pub.published[-1][0]
+    assert first.slot == 0
+    repo.edit_action(first.item_id, dismissed=True)
+    service.sync_todo(repo, pub)
+    assert first.item_id not in [e.item_id for e in pub.published[-1]]
+    return pub, first.item_id
+
+
+def test_dismissing_an_item_frees_its_row_for_the_next_one(repo):
+    pub, _ = dismissed_on_the_document(repo)
+    assert repo.occupied_slots() == {1}
+    item_id, _ = repo.add_item("Call the plumber")
+    service.sync_todo(repo, pub)
+    assert next(e for e in pub.published[-1] if e.item_id == item_id).slot == 0
+
+
+def test_a_tick_in_a_dismissed_items_row_does_not_tick_it(repo):
+    pub, dismissed_id = dismissed_on_the_document(repo)
+    pub.ticks = ({0}, "m2")
+    assert service.sync_todo(repo, pub)["ticked"] == 0
+    with repo.db() as db:
+        assert db.execute("SELECT status FROM actions WHERE id = ?", (dismissed_id,)).fetchone()["status"] == "open"
+
+
+def test_a_dismissed_item_whose_row_was_ticked_keeps_it(repo):
+    source, judge, pub = FakeSource(), FakeJudge(), FakePublisher()
+    notes(source)
+    service.collect(source, judge, repo)
+    service.sync_todo(repo, pub)
+    first = pub.published[-1][0]
+    pub.ticks = ({0}, "m1")
+    assert service.sync_todo(repo, pub)["ticked"] == 1
+    repo.edit_action(first.item_id, dismissed=True)
+    service.sync_todo(repo, pub)
+    assert repo.occupied_slots() == {0, 1}  # the tick is ink: the row is never reused
+
+
 OLD_TASKS_SCHEMA = """
 CREATE TABLE notebooks (id TEXT PRIMARY KEY, name TEXT NOT NULL, file_type TEXT NOT NULL);
 CREATE TABLE pages (notebook_id TEXT, page_index INTEGER, page_id TEXT, PRIMARY KEY (notebook_id, page_index));
@@ -603,6 +647,17 @@ def test_a_box_drawn_with_a_new_item_is_not_a_tick(repo):
     assert r["written"] == 1 and r["ticked"] == 0
     item = next(i for i in repo.items() if i["text"] == "Call the bank")
     assert item["status"] == "open"
+
+
+def test_a_dismissed_handwritten_item_keeps_its_row(repo):
+    pub = FakePublisher()
+    pub.ticks = (set(), "m1")
+    pub.written = [written(0, "Call the bank")]
+    service.sync_todo(repo, pub)
+    item = next(i for i in repo.items() if i["text"] == "Call the bank")
+    repo.edit_action(item["id"], dismissed=True)
+    service.sync_todo(repo, pub)
+    assert repo.occupied_slots() == {0}  # its handwriting is on that row
 
 
 def test_done_and_edited_handwritten_items(tmp_path, repo):

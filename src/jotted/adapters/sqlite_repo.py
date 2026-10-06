@@ -627,6 +627,11 @@ class SqliteRepository:
                 raise StateConflict(f"Item {action_id} is proposed: accept it first")
             if dismissed is not None:
                 values["dismissed"] = int(dismissed)
+            if dismissed and not row["written"]:
+                # Its row on the To-do document is blank now: free it, unless it has ink (a tick),
+                # so a later tick there can't mark the dismissed item done.
+                db.execute("DELETE FROM todo_slots WHERE item_id = ? AND kind = 'action' AND ticked = 0",
+                           (action_id,))
             if values:
                 self._update(db, "actions", action_id, values, stamp)
                 self._web_changed(db, stamp)
