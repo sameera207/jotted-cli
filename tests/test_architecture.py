@@ -118,6 +118,24 @@ def test_plugins_from_other_packages_are_found_by_entry_point(monkeypatch):
     assert plugins.available()["supernote"] == "jotted_supernote:SupernotePlugin"
 
 
+def test_https_downloads_go_through_net():
+    """Plain urllib can't verify certificates in the standalone build; net.urlopen can. Direct
+    urlopen calls are for this machine's own server only, in files that name no https URL."""
+    leaks = []
+    for path in SRC.rglob("*.py"):
+        if path.name == "net.py":
+            continue
+        tree = ast.parse(path.read_text())
+        direct = any(isinstance(n, ast.Call) and getattr(n.func, "attr", getattr(n.func, "id", None)) == "urlopen"
+                     and not (isinstance(n.func, ast.Attribute) and getattr(n.func.value, "id", None) == "net")
+                     for n in ast.walk(tree))
+        https = any(isinstance(n, ast.Constant) and isinstance(n.value, str) and "https://" in n.value
+                    for n in ast.walk(tree))
+        if direct and https:
+            leaks.append(str(path.relative_to(SRC)))
+    assert not leaks, f"call net.urlopen for https: {leaks}"
+
+
 # ---------------------------------------------------------------- one source job at a time
 
 

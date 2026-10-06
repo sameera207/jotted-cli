@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import ssl
 import stat
 import sys
 import zipfile
@@ -13,7 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from jotted import cli, config, keys, onboarding, selfupdate  # noqa: E402
+from jotted import cli, config, keys, net, onboarding, selfupdate  # noqa: E402
 from jotted.plugins.remarkable import cloud, rmapi_install, setup as rm_setup  # noqa: E402
 
 
@@ -94,6 +95,57 @@ def test_rmapi_install_checks_the_sum_and_unpacks_the_binary(tmp_path, monkeypat
     with pytest.raises(rmapi_install.InstallError, match="checksum"):
         rmapi_install.install(tmp_path / "bin2", "Darwin", "arm64")
     assert not (tmp_path / "bin2").exists()
+
+
+def test_an_untrusted_certificate_says_what_to_do(tmp_path, monkeypatch):
+    import urllib.error
+
+    def refuse(url):
+        raise urllib.error.URLError(ssl.SSLCertVerificationError(1, "certificate verify failed"))
+
+    monkeypatch.setattr(rmapi_install, "_download", refuse)
+    with pytest.raises(rmapi_install.InstallError, match="didn't trust github.com's certificate.*rmapi.binary"):
+        rmapi_install.install(tmp_path / "bin", "Darwin", "arm64")
+    monkeypatch.setattr(rmapi_install, "_download", lambda url: (_ for _ in ()).throw(urllib.error.URLError("offline")))
+    with pytest.raises(rmapi_install.InstallError, match="could not download rmapi: .*offline"):
+        rmapi_install.install(tmp_path / "bin", "Darwin", "arm64")
+
+
+def test_downloads_trust_the_os_store_unless_told_otherwise(monkeypatch):
+    import builtins
+
+    import certifi
+    import truststore
+
+    for name in ("SSL_CERT_FILE", "SSL_CERT_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    assert isinstance(net.ssl_context(), truststore.SSLContext)
+
+    monkeypatch.setenv("SSL_CERT_FILE", certifi.where())  # set by hand: it wins
+    ctx = net.ssl_context()
+    assert not isinstance(ctx, truststore.SSLContext) and ctx.verify_mode == ssl.CERT_REQUIRED
+    monkeypatch.delenv("SSL_CERT_FILE")
+
+    real_import = builtins.__import__
+    loaded = []
+
+    def no_truststore(name, *args, **kwargs):
+        if name == "truststore":
+            raise ImportError("no truststore here")
+        loaded.append(name)
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_truststore)
+    ctx = net.ssl_context()
+    assert "certifi" in loaded and not isinstance(ctx, truststore.SSLContext)
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.cert_store_stats()["x509_ca"] > 0
+
+
+def test_only_https_leaves_this_machine():
+    with pytest.raises(ValueError, match="only https"):
+        net.urlopen("http://github.com/ddvk/rmapi", timeout=1)
+    with pytest.raises(ValueError, match="only https"):
+        net.urlopen("file:///etc/passwd", timeout=1)
 
 
 def test_rmapi_builds_are_known_for_common_machines():

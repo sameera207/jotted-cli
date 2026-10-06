@@ -27,6 +27,16 @@ class CloudError(SourceError):
     pass
 
 
+class NotConnected(CloudError):
+    """No rmapi token: setup isn't finished, so apps send the person to Connect."""
+    code = "not_set_up"
+    step = "remarkable.connect"
+
+    def __init__(self, cfg: Config):
+        super().__init__(f"Your reMarkable isn't connected yet (no rmapi token at {cfg.rmapi.token_file}). "
+                         "Run `jotted connect`")
+
+
 @dataclass(frozen=True)
 class DocRef:
     id: str
@@ -133,7 +143,7 @@ def _ref(n: dict) -> DocRef:
 def library(cfg: Config) -> tuple[list[LibraryEntry], list[str]]:
     """Every document (with its folder path) and every folder path in the library. Trash excluded."""
     if not cfg.rmapi.token_file.exists():
-        raise CloudError(f"no rmapi token at {cfg.rmapi.token_file}; run `jotted connect` first")
+        raise NotConnected(cfg)
     nodes = _parse_json_list(_run(cfg, ["-ni", "-json", "find", "/"]))
     folders = {n["id"]: n for n in nodes
                if n.get("type") == "CollectionType" and n.get("id") and n["id"] != "trash" and n.get("parent") != "trash"}
@@ -199,7 +209,7 @@ def upload_pdf(cfg: Config, pdf: Path, *, content_only: bool, folder: str = "/")
     created and rmapi refuses if one with that name already exists.
     """
     if not cfg.rmapi.token_file.exists():
-        raise CloudError(f"no rmapi token at {cfg.rmapi.token_file}; run `jotted connect` first")
+        raise NotConnected(cfg)
     args = ["-ni", "put"] + (["--content-only"] if content_only else []) + [str(pdf), folder]
     out = _run(cfg, args)
     log.debug("rmapi put: %s", out.strip())

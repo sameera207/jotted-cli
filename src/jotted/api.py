@@ -240,6 +240,8 @@ class Jotted:
         except llm.ModelError as e:
             raise ModelFailed(str(e)) from e
         except SYNC_ERRORS as e:
+            if getattr(e, "code", None) == NotSetUp.code:  # the source found a step missing after all
+                raise NotSetUp(str(e), step=e.step) from e
             raise Unavailable(str(e)) from e
 
     def _require_source(self) -> None:
@@ -484,6 +486,7 @@ class Jotted:
     @operation("check")
     def check(self) -> dict:
         """Check now: in the background when a scheduler runs (the web server), else right here."""
+        self._require_source()
         if self.scheduler:
             self.scheduler.poll_now()
             return {"background": self.scheduler.describe()}

@@ -20,6 +20,8 @@ import urllib.request
 from dataclasses import dataclass
 from importlib import metadata
 
+from . import net
+
 DIST = "jotted"
 SKIP_VAR = "JOTTED_NO_UPDATE"  # set to 1 to never check
 DONE_VAR = "JOTTED_UPDATED"  # set on the re-run after an update, so it happens once
@@ -72,7 +74,7 @@ def latest(repo: str, timeout: float = 4) -> str | None:
     req = urllib.request.Request(f"https://api.github.com/repos/{repo}/releases/latest",
                                  headers={"Accept": "application/vnd.github+json", "User-Agent": DIST})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - fixed https URL
+        with net.urlopen(req, timeout=timeout) as resp:
             tag = json.loads(resp.read()).get("tag_name")
     except (OSError, ValueError):
         return None

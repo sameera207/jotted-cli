@@ -13,9 +13,10 @@ import os
 import platform
 import tarfile
 import tempfile
-import urllib.request
 import zipfile
 from pathlib import Path
+
+from ... import net
 
 VERSION = "v0.0.35"
 URL = "https://github.com/ddvk/rmapi/releases/download/{version}/{asset}"
@@ -43,7 +44,7 @@ def asset_for(system: str | None = None, machine: str | None = None) -> tuple[st
 
 
 def _download(url: str) -> bytes:
-    with urllib.request.urlopen(url, timeout=120) as resp:  # noqa: S310 - fixed https URL
+    with net.urlopen(url, timeout=120) as resp:
         return resp.read()
 
 
@@ -57,6 +58,11 @@ def install(dest_dir: Path, system: str | None = None, machine: str | None = Non
     try:
         data = _download(URL.format(version=VERSION, asset=asset))
     except OSError as e:
+        if net.untrusted(e):
+            machine = "this Mac" if platform.system() == "Darwin" else "this computer"
+            raise InstallError(f"Couldn't download rmapi: {machine} didn't trust github.com's certificate. "
+                               "If you're on a work network, it may inspect HTTPS; ask IT, or install rmapi "
+                               "yourself and set `rmapi.binary`.") from e
         raise InstallError(f"could not download rmapi: {e}") from e
     if hashlib.sha256(data).hexdigest() != sha256:
         raise InstallError(f"{asset} did not match its published checksum; not installed")

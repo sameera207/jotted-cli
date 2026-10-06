@@ -146,6 +146,21 @@ def test_a_missing_setup_step_is_named(cfg, capsys, monkeypatch):
     assert code == 3 and err["step"] == "remarkable.connect" and "jotted connect --stdin" in err["message"]
 
 
+
+def test_check_before_setup_names_the_missing_step(cfg, capsys, monkeypatch):
+    monkeypatch.setattr(rm_setup.shutil, "which", lambda b: None)
+    code, err = error(capsys, "check")  # not {"ok": true, "data": {}}
+    assert code == 3 and err["code"] == "not_set_up" and err["step"] == "remarkable.rmapi"
+
+
+def test_a_missing_rmapi_token_is_a_setup_step_not_a_failure(cfg, capsys, monkeypatch):
+    """Even when the source finds it out itself, past the setup check."""
+    monkeypatch.setattr(rm_setup.shutil, "which", lambda b: "/opt/bin/rmapi")
+    monkeypatch.setattr(rm_setup, "check_connect", lambda c: {"done": True})
+    code, err = error(capsys, "library")
+    assert code == 3 and err["code"] == "not_set_up" and err["step"] == "remarkable.connect", err
+    assert contract.error_of(cloud.NotConnected(cfg))["error"]["step"] == "remarkable.connect"
+
 def test_a_busy_device_says_retry(cfg, capsys, monkeypatch, rmapi):
     from jotted import locking
 

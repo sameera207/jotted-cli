@@ -12,7 +12,8 @@ every run, which is slow and can't be signed with the app's identity. The app si
 notarizes every file in the folder itself.
 
 Before packaging, the build is run as an app would run it, with no Python on hand: version,
-schema, the MCP widget, and a command against a scratch app folder.
+schema, the MCP widget, a command against a scratch app folder, and `setup prepare`, which
+downloads rmapi over HTTPS (so it needs the network; --skip-tests builds offline).
 """
 
 from __future__ import annotations
@@ -60,6 +61,7 @@ def freeze() -> Path:
         "--name", "jotted", "--onedir", "--noconfirm", "--clean", "--log-level", "WARN",
         "--distpath", str(work / "dist"), "--workpath", str(work / "work"), "--specpath", str(work),
         "--collect-submodules", "jotted", "--collect-data", "jotted", "--copy-metadata", "jotted",
+        "--collect-data", "certifi", "--hidden-import", "truststore",  # net.py imports them lazily
         "--exclude-module", "pytest",
     ], check=True, cwd=ROOT)
     folder = work / "dist" / "jotted"
@@ -85,7 +87,7 @@ def smoke_test(folder: Path, expected_version: str) -> None:
         config = tmp / "config.toml"
         config.write_text((ROOT / "src" / "jotted" / "config.example.toml").read_text().replace(
             'db   = "./data/jotted.db"', f'db = "{tmp}/db.sqlite"'))
-        env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp), "JOTTED_HOME": str(tmp / "home"),
+        env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": str(tmp), "JOTTED_HOME": str(tmp / "home"),
                "JOTTED_CONFIG": str(config),
                "JOTTED_NO_UPDATE": "1", "JOTTED_CLAUDE_CONFIG": str(tmp / "claude" / "config.json"),
                "PYTHONPATH": str(poison), "PYTHONHOME": str(tmp / "nowhere")}
@@ -109,6 +111,13 @@ def smoke_test(folder: Path, expected_version: str) -> None:
         added = check("items", "add", "Smoke", "test")
         assert added["ok"] and added["data"]["text"] == "Smoke test", added
         assert check("plugins")["data"]["installed"][0]["name"] == "remarkable"
+
+        # One real HTTPS download, made the way setup makes it. Nothing above touches the
+        # network, which is how a build that couldn't verify certificates shipped (v0.1.0).
+        # No SSL_CERT_FILE, SSL_CERT_DIR or REQUESTS_CA_BUNDLE: the build must find its own.
+        prepared = check("setup", "prepare")
+        rmapi = next((s for s in prepared.get("data", {}).get("steps", []) if s["id"] == "remarkable.rmapi"), None)
+        assert prepared["ok"] and rmapi and rmapi["done"], f"rmapi didn't download over HTTPS: {prepared}"
 
         messages = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
                     {"jsonrpc": "2.0", "id": 2, "method": "resources/read", "params": {"uri": "ui://jotted/list"}}]
