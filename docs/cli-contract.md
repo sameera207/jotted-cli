@@ -296,7 +296,7 @@ Generated from `jotted schema` (release 0.1.1, contract 1, accepts 1+). Exact ar
 | `jotted settings` | Show or change settings (also in the web app). |
 | `jotted settings set KEY VALUE` | Set one: e.g. todo_enabled true, action_threshold 0.8. |
 | `jotted collect [--dry-run]` | Read what changed in watched folders and update the to-do list. |
-| `jotted todo [--force]` | Read ticks from, and republish, the To-do document. |
+| `jotted todo [--force] [--fresh]` | Read ticks from, and republish, the To-do document. |
 | `jotted check` | Collect and update the To-do document now. |
 | `jotted status` | What Jotted reads, judges and publishes, and when it last did. |
 | `jotted image page DOC_ID PAGE [--highlight ANCHOR] [--width WIDTH] [--out OUT]` | A page, with a line highlighted. |
@@ -668,14 +668,17 @@ jotted collect [--dry-run]
 Read ticks from, and republish, the To-do document.
 
 ```text
-jotted todo [--force]
+jotted todo [--force] [--fresh]
 ```
 
 | Argument | Type | Notes |
 | --- | --- | --- |
 | `--force` | `boolean` | republish even if nothing changed |
+| `--fresh` | `boolean` | after reading it, print the list again from the top with open items only |
 
-`data`: `{enabled?: boolean}`
+`data`: `{enabled?: boolean, unsupported?: boolean, ticked?: integer, written?: integer, published?: boolean, items?: integer, overflow?: integer, rebuilt?: boolean}`
+
+With --fresh the document is deleted and printed again from the top with open items only, and rebuilt is true; if there was no document yet, a new one is just published (rebuilt false).
 
 ### `jotted check`
 

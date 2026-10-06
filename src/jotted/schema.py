@@ -94,7 +94,11 @@ DATA: dict[str, dict] = {
               "lines_judged": INT, "actions_new": INT, "actions_updated": INT, "actions_missing": INT,
               "errors": _arr(STR)}),
         _arr(_obj({"path": STR, "id": STR, "pages": _arr(INT)}))], "description": "--dry-run: the changed pages"},
-    "todo": _obj({"enabled": BOOL}, required=[]),
+    "todo": {**_obj({"enabled": BOOL, "unsupported": BOOL, "ticked": INT, "written": INT, "published": BOOL,
+                     "items": INT, "overflow": INT, "rebuilt": BOOL}, required=[]),
+             "description": "With --fresh the document is deleted and printed again from the top with open "
+                            "items only, and rebuilt is true; if there was no document yet, a new one is just "
+                            "published (rebuilt false)"},
     "check": _obj({"collect": ANY, "todo": ANY}, required=[]),
     "status": _obj({"source": SOURCE, "judge": STR, "watch": _arr(STR), "documents_read": INT,
                     "last_collected_at": NSTR, "items": _obj({"open": INT, "done": INT, "proposed": INT}),

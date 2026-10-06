@@ -81,14 +81,14 @@ class App:
                             errors=len(summary.errors))
         return summary
 
-    def sync_todo(self, force: bool = False) -> dict:
+    def sync_todo(self, force: bool = False, fresh: bool = False) -> dict:
         if not self.repo.settings().todo_enabled:
             return {"enabled": False}
         doc = self.todo_document()
         if doc is None:
             return {"enabled": False, "unsupported": True}
         try:
-            result = service.sync_todo(self.repo, doc, force=force)
+            result = service.sync_todo(self.repo, doc, force=force, fresh=fresh)
         except SYNC_ERRORS as e:
             self.repo.add_event("source.error", message=str(e))
             raise
