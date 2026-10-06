@@ -268,7 +268,7 @@ When you bump the pin, download both files again: the release notes list contrac
 ## Command reference
 
 <!-- BEGIN GENERATED: commands -->
-Generated from `jotted schema` (release 0.1.0, contract 1, accepts 1+). Exact argument types and data shapes: `docs/schema.json`.
+Generated from `jotted schema` (release 0.1.1, contract 1, accepts 1+). Exact argument types and data shapes: `docs/schema.json`.
 
 | Command | What it does |
 | --- | --- |
