@@ -476,12 +476,13 @@ class Jotted:
         return self._source_job("The source", lambda: self.app.collect(progress=progress).as_dict(), wait)
 
     @operation("todo.sync")
-    def sync_todo(self, force: bool = False, wait: float | None = None) -> dict:
-        """Read ticks and new items from the To-do document, then republish it if needed."""
+    def sync_todo(self, force: bool = False, fresh: bool = False, wait: float | None = None) -> dict:
+        """Read ticks and new items from the To-do document, then republish it if needed.
+        `fresh` then prints it again from the top with the open items only."""
         if not self.repo.settings().todo_enabled:
             raise Invalid("The To-do document is off. Turn it on with `jotted settings set todo_enabled true` "
                           "or in Settings.")
-        return self._source_job("The source", lambda: self.app.sync_todo(force=force), wait)
+        return self._source_job("The source", lambda: self.app.sync_todo(force=force, fresh=fresh), wait)
 
     @operation("check")
     def check(self) -> dict:

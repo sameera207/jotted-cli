@@ -543,6 +543,21 @@ def test_the_op_endpoint_needs_the_token(cfg):
     assert c.post("/api/op/nope", json={}, headers=token).status_code == 404
 
 
+def test_todo_fresh_is_todo_sync_with_fresh(cfg, capsys):
+    args = cli.build_parser().parse_args(["todo", "--fresh"])
+    call = args.func(cfg, args)
+    assert call.op == "todo.sync" and call.kwargs == {"force": False, "fresh": True}
+    _, err = error(capsys, "todo", "--fresh")
+    assert err["code"] == "invalid" and "To-do document is off" in err["message"]
+
+    from jotted.server import create_app
+
+    flask = create_app(cfg, background=False)
+    r = flask.test_client().post("/api/op/todo.sync", json={"fresh": True},
+                                 headers={"X-Jotted-Token": flask.config["token"]})
+    assert r.status_code == 200 and r.get_json()["error"]["code"] == "invalid"  # the argument is accepted
+
+
 # ---------------------------------------------------------------- MCP
 
 

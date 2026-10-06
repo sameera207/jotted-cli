@@ -330,9 +330,10 @@ def cmd_collect(cfg: Config, args: argparse.Namespace) -> Call:
 
 @uses("todo.sync")
 def cmd_todo(cfg: Config, args: argparse.Namespace) -> Call:
-    return Call("todo.sync", {"force": args.force}, lambda r: console.print(
+    return Call("todo.sync", {"force": args.force, "fresh": args.fresh}, lambda r: console.print(
         f"{r.get('ticked', 0)} ticked, {r.get('written', 0)} written on paper; "
-        + ("published" if r.get("published") else "unchanged")
+        + (f"printed fresh with {r.get('items', 0)} open item(s)" if args.fresh and r.get("published")
+           else "published" if r.get("published") else "unchanged")
         + (f"; [yellow]{r['overflow']} item(s) didn't fit[/yellow]" if r.get("overflow") else "")),
         status="Reading ticks and publishing the To-do document…")
 
@@ -822,6 +823,8 @@ def build_parser() -> argparse.ArgumentParser:
     co.add_argument("--dry-run", action="store_true", help="only show which documents and pages changed")
     td = command("todo", cmd_todo, "read ticks from, and republish, the To-do document")
     td.add_argument("--force", action="store_true", help="republish even if nothing changed")
+    td.add_argument("--fresh", action="store_true",
+                    help="after reading it, print the list again from the top with open items only")
     command("check", cmd_check, "collect and update the To-do document now")
     command("status", cmd_status, "what Jotted reads, judges and publishes, and when it last did")
 

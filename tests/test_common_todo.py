@@ -97,6 +97,9 @@ class FakePublisher:
     def publish(self, entries):
         self.published.append([dataclasses.replace(e) for e in entries])
 
+    def document_id(self):
+        return "todo-doc" if self.ticks is not None else None
+
     def delete(self):
         self.deleted += 1
         self.ticks, self.written, self.ink, self.pages_capacity = None, [], set(), None
@@ -725,6 +728,64 @@ def test_a_document_with_another_page_count_is_rebuilt(repo):
     assert r["rebuilt"] and pub.deleted == 1 and [e.slot for e in pub.published[-1]] == [0, 1]
     pub.ticks = (set(), "m2")  # the new one, not yet opened on the tablet
     assert not service.sync_todo(repo, pub)["rebuilt"]
+
+
+def test_fresh_rebuilds_with_rows_left_after_reading_the_paper(repo):
+    source, judge, pub = FakeSource(), FakeJudge(), FakePublisher(capacity=10)
+    pub.ticks = (set(), "m1")
+    notes(source)
+    service.collect(source, judge, repo)
+    service.sync_todo(repo, pub)  # rows 0 and 1
+    done_on_web = next(i for i in repo.items() if i["source"].get("anchor") == "1:30")
+    repo.edit_action(done_on_web["id"], status="done")
+    service.sync_todo(repo, pub)  # struck through in row 1; plenty of rows left
+    ticked = next(e for e in pub.published[-1] if e.slot == 0)
+
+    # Ticked and written on paper since: both count before the rebuild.
+    pub.ticks, pub.written = ({0}, "m2"), [written(4, "Call the bank")]
+    r = service.sync_todo(repo, pub, fresh=True)
+    assert r["ticked"] == 1 and r["written"] == 1
+    assert r["rebuilt"] and r["published"] and pub.deleted == 1
+    assert repo.item(ticked.item_id)["status"] == "done" and repo.item(done_on_web["id"])["status"] == "done"
+    assert [(e.slot, e.text, e.done) for e in pub.published[-1]] == [(0, "Call the bank", False)]
+    assert r["items"] == 1
+
+
+def test_fresh_with_no_document_yet_just_publishes(repo):
+    source, judge, pub = FakeSource(), FakeJudge(), FakePublisher()
+    notes(source)
+    service.collect(source, judge, repo)
+    r = service.sync_todo(repo, pub, fresh=True)
+    assert r["published"] and not r["rebuilt"] and pub.deleted == 0
+    assert [e.slot for e in pub.published[-1]] == [0, 1]
+
+
+def test_todo_sync_fresh_through_the_fast_path(tmp_path, monkeypatch):
+    text = config.EXAMPLE.read_text().replace('db   = "./data/jotted.db"', f'db = "{tmp_path}/db.sqlite"')
+    path = tmp_path / "config.toml"
+    path.write_text(text)
+    monkeypatch.setenv(config.ENV_VAR, str(path))
+    cfg = config.load()
+
+    from jotted.server import create_app
+
+    repo = SqliteRepository(cfg.server.db)
+    repo.save_settings(Settings(watch=["/Meetings"]))
+    source, judge, pub = FakeSource(), FakeJudge(), FakePublisher()
+    notes(source)
+    service.collect(source, judge, repo)
+    flask = create_app(cfg, app_=fake_app(cfg, repo, source, judge, publisher=pub), background=False)
+    client = flask.test_client()
+    client.environ_base["HTTP_X_JOTTED_TOKEN"] = flask.config["token"]
+
+    off = client.post("/api/op/todo.sync", json={"fresh": True}).get_json()
+    assert off["error"]["code"] == "invalid"  # the To-do document is off
+    client.put("/api/settings", json={"todo_enabled": True})
+    pub.ticks = (set(), "m1")  # a document on the tablet already
+    since = repo.events()[-1]["cursor"]
+    r = client.post("/api/op/todo.sync", json={"fresh": True}).get_json()
+    assert r["ok"] and r["data"]["rebuilt"] and r["data"]["published"] and pub.deleted == 1
+    assert "todo.published" in [e["type"] for e in repo.events(since)]
 
 
 def _entries(*docs):

@@ -3293,13 +3293,44 @@
           "name": "force",
           "required": false,
           "type": "boolean"
+        },
+        {
+          "flags": [
+            "--fresh"
+          ],
+          "help": "after reading it, print the list again from the top with open items only",
+          "name": "fresh",
+          "required": false,
+          "type": "boolean"
         }
       ],
       "command": "todo",
       "data": {
+        "description": "With --fresh the document is deleted and printed again from the top with open items only, and rebuilt is true; if there was no document yet, a new one is just published (rebuilt false)",
         "properties": {
           "enabled": {
             "type": "boolean"
+          },
+          "items": {
+            "type": "integer"
+          },
+          "overflow": {
+            "type": "integer"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "rebuilt": {
+            "type": "boolean"
+          },
+          "ticked": {
+            "type": "integer"
+          },
+          "unsupported": {
+            "type": "boolean"
+          },
+          "written": {
+            "type": "integer"
           }
         },
         "required": [],
@@ -4619,9 +4650,13 @@
       "params": {}
     },
     "todo.sync": {
-      "doc": "Read ticks and new items from the To-do document, then republish it if needed.",
+      "doc": "Read ticks and new items from the To-do document, then republish it if needed.\n`fresh` then prints it again from the top with the open items only.",
       "params": {
         "force": {
+          "default": false,
+          "type": "bool"
+        },
+        "fresh": {
           "default": false,
           "type": "bool"
         }

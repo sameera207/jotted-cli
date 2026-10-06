@@ -88,7 +88,7 @@ def _collect_doc(source: DocumentSource, judge: ActionJudge, repo: Repository, d
     repo.save_doc(doc, len(pages))
 
 
-def sync_todo(repo: Repository, publisher: TodoPublisher, force: bool = False) -> dict:
+def sync_todo(repo: Repository, publisher: TodoPublisher, force: bool = False, fresh: bool = False) -> dict:
     """Read the To-do document, then republish it if anything changed.
 
     Paper is read before publishing, so nothing done on paper is lost to a republish:
@@ -100,6 +100,9 @@ def sync_todo(repo: Repository, publisher: TodoPublisher, force: bool = False) -
     or the document has a different number of pages, it is deleted and rebuilt: a fresh document
     with the open items only. A document deleted on the device, or replaced by another one, is
     started afresh the same way.
+
+    `fresh` rebuilds it now, rows left or not, so done items leave the paper (they stay done in
+    the store). Paper is still read first. With no document yet, it is just published.
     """
     ticked = written = 0
     read = publisher.read_paper(repo.occupied_slots())
@@ -115,7 +118,7 @@ def sync_todo(repo: Repository, publisher: TodoPublisher, force: bool = False) -
         ticked = repo.apply_ticks(read.ticks, read.marker)
     include_others = repo.settings().include_others
     capacity = publisher.capacity()
-    rebuilt = read is not None and read.capacity is not None and read.capacity != capacity
+    rebuilt = read is not None and (fresh or (read.capacity is not None and read.capacity != capacity))
     if not rebuilt:
         entries, unplaced = repo.assign_slots(repo.todo_entries(include_others), capacity,
                                               read.inked if read else set())
