@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 
 from .model import CollectSummary, DocInfo
-from .ports import ActionJudge, DocumentSource, Progress, Repository, TodoPublisher
+from .ports import ActionJudge, DocumentSource, Progress, Repository, SourceError, TodoPublisher
 
 log = logging.getLogger("jotted.core")
 
@@ -50,7 +50,8 @@ def collect(source: DocumentSource, judge: ActionJudge, repo: Repository,
                          first=marker is None)
         except Exception as e:  # one bad document must not stop the rest
             log.exception("collecting %s failed", doc.path)
-            summary.errors.append(f"{doc.path}: {e}")
+            # a SourceError's message is already for people and names the document
+            summary.errors.append(str(e) if isinstance(e, SourceError) else f"{doc.path}: {e}")
     return summary
 
 

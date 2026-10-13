@@ -15,6 +15,7 @@ from jotted.plugins.remarkable import page, todo_document  # noqa: E402
 from jotted.plugins.remarkable.settings import TemplateConfig  # noqa: E402
 from jotted.adapters.sqlite_repo import SqliteRepository  # noqa: E402
 from jotted.core import service  # noqa: E402
+from jotted.core.ports import SourceError  # noqa: E402
 from jotted.core.model import (  # noqa: E402
     DocInfo, Judgment, PageInfo, PaperRead, Settings, SourceLine, TodoEntry, WrittenItem,
 )
@@ -225,6 +226,20 @@ def test_failed_document_is_retried_next_run(repo):
     source.read_page = boom
     summary = service.collect(source, judge, repo)
     assert summary.errors and repo.doc_marker("fake", "doc-a") is None  # not marked as collected
+    assert summary.errors[0].endswith(": download failed")  # an unexpected error gets the document's path
+
+
+def test_source_error_message_is_kept_as_it_is(repo):
+    """A SourceError is written for people and names the document: no path in front of it."""
+    source, judge = FakeSource(), FakeJudge()
+    notes(source)
+
+    def dropped(doc, page):
+        raise SourceError(f"Couldn't download {doc.name}: the connection to reMarkable cloud dropped.")
+
+    source.read_page = dropped
+    summary = service.collect(source, judge, repo)
+    assert summary.errors[0].startswith("Couldn't download ")
 
 
 
