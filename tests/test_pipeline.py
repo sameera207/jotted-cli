@@ -1,7 +1,9 @@
 import json
 import os
 import random
+import re
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -183,6 +185,90 @@ cp "{doc}" "$(printf '%s' "$NAME").rmdoc"  # fails like rmapi when the folder is
     with pytest.raises(cloud.CloudError):
         cloud.download(cfg, cloud.DocRef(id="x", name="../../escape", version=1, modified="m", parent=""))
     assert not (cfg.paths.cache_dir.parent / "escape").exists()
+
+
+RESET = ("ERROR: 2026/10/11 11:09:04 transport.go:258: http request failed with Get "
+         "\"https://internal.cloud.remarkable.com/sync/v3/files/0c37\": read tcp 192.168.86.215:55453->35.201.126.131:443: "
+         "read: connection reset by peer\nERROR: 2026/10/11 11:09:04 main.go:86: Error: Failed to download file "
+         "Quick sheets with Get \"https://internal.cloud.remarkable.com/x\": read: connection reset by peer")
+
+
+@pytest.fixture
+def rmapi_replies(cfg, monkeypatch):
+    """rmapi stubbed out: each call takes the next reply (exit status and stderr, or "timeout")."""
+    replies, calls = [], []
+
+    def run(cmd, **kw):
+        calls.append(cmd[1:])
+        reply = replies.pop(0)
+        if reply == "timeout":
+            raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+        status, stderr = reply
+        return subprocess.CompletedProcess(cmd, status, "[]" if status == 0 else "", stderr)
+
+    monkeypatch.setattr(cloud, "_binary", lambda cfg: "rmapi")
+    monkeypatch.setattr(cloud.subprocess, "run", run)
+    monkeypatch.setattr(cloud, "RETRY_DELAYS_S", (0, 0))
+    cfg.rmapi.token_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.rmapi.token_file.write_text("token")
+    return replies, calls
+
+
+def test_reads_are_retried_after_a_network_failure(cfg, rmapi_replies):
+    replies, calls = rmapi_replies
+    replies[:] = [(1, RESET), "timeout", (0, "")]
+    assert cloud.library(cfg) == ([], [])
+    assert len(calls) == 3
+
+
+def test_a_failure_that_lasts_ends_in_a_short_message(cfg, rmapi_replies):
+    replies, calls = rmapi_replies
+    replies[:] = [(1, RESET)] * 3
+    doc = cloud.DocRef(id="0f1f", name="Quick sheets", version=1, modified="m", parent="")
+    with pytest.raises(cloud.CloudError) as e:
+        cloud.download(cfg, doc)
+    assert str(e.value) == "Couldn't download Quick sheets: the connection to reMarkable cloud dropped."
+    assert len(calls) == 3
+
+
+def test_two_timeouts_end_the_retries(cfg, rmapi_replies):
+    replies, calls = rmapi_replies
+    replies[:] = ["timeout", "timeout", (0, "")]
+    with pytest.raises(cloud.CloudError, match=r"^Couldn't list your documents: reMarkable cloud didn't answer in time\.$"):
+        cloud.library(cfg)
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("stderr, said", [
+    ("Get \"https://x\": dial tcp: lookup internal.cloud.remarkable.com: no such host", "couldn't reach reMarkable cloud"),
+    ("Get \"https://x\": net/http: TLS handshake timeout", "the connection to reMarkable cloud dropped"),
+    ("Get \"https://x\": unexpected EOF", "the connection to reMarkable cloud dropped"),
+    ("request failed with status 503", "reMarkable cloud had a problem on its side"),
+])
+def test_network_failures_are_told_plainly(cfg, rmapi_replies, stderr, said):
+    replies, calls = rmapi_replies
+    replies[:] = [(1, stderr), (0, "")]
+    assert cloud.library(cfg) == ([], [])  # and retried
+    replies[:] = [(1, stderr)] * 3
+    with pytest.raises(cloud.CloudError, match=f"^Couldn't list your documents: {re.escape(said)}"):
+        cloud.library(cfg)
+
+
+def test_other_failures_are_not_retried(cfg, rmapi_replies):
+    replies, calls = rmapi_replies
+    replies[:] = [(1, "ERROR: 2026/10/11 11:09:04 main.go:86: Error: failed to get user token: 401 Unauthorized")]
+    with pytest.raises(cloud.CloudError) as e:
+        cloud.library(cfg)
+    assert str(e.value) == "Couldn't list your documents: failed to get user token: 401 Unauthorized."
+    assert len(calls) == 1
+
+
+def test_writes_are_not_retried(cfg, rmapi_replies, tmp_path):
+    replies, calls = rmapi_replies
+    replies[:] = [(1, RESET)]
+    with pytest.raises(cloud.CloudError, match="^Couldn't upload To-do: the connection to reMarkable cloud dropped"):
+        cloud.upload_pdf(cfg, tmp_path / "To-do.pdf", content_only=True)
+    assert len(calls) == 1
 
 
 # ---------------------------------------------------------------- recognition and classification (stubbed)
